@@ -45,6 +45,10 @@
     :initarg :history
     :initform nil
     :reader prompt-window-history)
+   (default
+    :initarg :default
+    :initform nil
+    :reader prompt-window-default)
    (gravity
     :initarg :gravity
     :initform :center
@@ -139,24 +143,40 @@
 (defvar *prompt-completion-window-gravity* :horizontally-adjacent-window)
 
 (defun open-prompt-completion ()
+  "Retrieve results of the window completion function from the currently
+open prompt and open its respective completion menu with the
+results. If prompt parameters has default parameter set, ensure this
+is first selected completion."
   (alexandria:when-let (completion-fn (prompt-window-completion-function (current-prompt-window)))
     (with-point ((start (current-prompt-start-point)))
       (lem/completion-mode:run-completion
        (lambda (point)
          (with-point ((start start)
                       (end point))
-           (let ((items (funcall completion-fn
-                                 (points-to-string start
-                                                   (buffer-end-point (point-buffer end))))))
-             (loop :for item :in items
-                   :when (typecase item
-                           (string
-                            (lem/completion-mode:make-completion-item :label item
-                                                                      :start start
-                                                                      :end end))
-                           (lem/completion-mode:completion-item
-                            item))
-                   :collect :it))))
+		   (let* ((items (funcall completion-fn
+								  (points-to-string start
+													(buffer-end-point (point-buffer end)))))
+				  (items-as-completion-items
+					(loop :for item :in items
+						  :when (typecase item
+								  (string
+								   (lem/completion-mode:make-completion-item :label item
+																			 :start start
+																			 :end end))
+								  (lem/completion-mode:completion-item
+								   item))
+							:collect :it))
+				  (default-item (prompt-window-default (current-prompt-window)))
+				  (default-completion-item
+					(find default-item items-as-completion-items
+						  :key #'lem/completion-mode:completion-item-label
+						  :test #'equal)))
+			 (if default-completion-item
+				 (cons default-completion-item
+					   (remove default-item items-as-completion-items
+							   :key #'lem/completion-mode:completion-item-label
+							   :test #'equal))
+				 items-as-completion-items))))
        :style `(:gravity ,*prompt-completion-window-gravity*
                 :offset-y -1
                 :shape ,*prompt-completion-window-shape*)
@@ -214,6 +234,7 @@
                    :existing-test-function (prompt-window-existing-test-function parameters)
                    :caller-of-prompt-window (prompt-window-caller-of-prompt-window parameters)
                    :history (prompt-window-history parameters)
+                   :default (prompt-window-default parameters)
                    :gravity (prompt-gravity parameters)
                    :border (if (prompt-use-border-p parameters) +border-size+ 0))))
 
@@ -365,12 +386,13 @@
         (execute-condition (e)
           (execute-input e))))))
 
-(defmethod lem-core::%prompt-for-character (prompt-string &key (gravity :center))
+(defmethod lem-core::%prompt-for-character (prompt-string &key (gravity :center) default)
   (prompt-for-aux :prompt-string prompt-string
                   :initial-string ""
                   :parameters (make-instance 'prompt-parameters
                                              :caller-of-prompt-window (current-window)
-                                             :gravity gravity)
+                                             :gravity gravity
+											 :default default)
                   :body-function (lambda ()
                                    (redraw-display)
                                    (let ((key (read-key)))
@@ -393,6 +415,7 @@
                                             completion-function
                                             test-function
                                             history-symbol
+										    default
                                             (syntax-table (current-syntax))
                                             gravity
                                             edit-callback
@@ -405,6 +428,7 @@
                                              :existing-test-function test-function
                                              :caller-of-prompt-window (current-window)
                                              :history (get-history history-symbol)
+											 :default default
                                              :gravity (or gravity lem-core::*default-prompt-gravity*)
                                              :use-border use-border)
                   :syntax-table syntax-table
@@ -554,6 +578,7 @@
                                              (namestring (user-homedir-pathname))))))
                             :test-function (and existing #'virtual-probe-file)
                             :history-symbol 'prompt-for-file
+							:default default
                             :gravity gravity
                             :special-keymap *file-prompt-keymap*)))
     (if (string= result "")

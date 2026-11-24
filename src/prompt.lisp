@@ -20,7 +20,7 @@ When set to false, the completion list only opens when the user presses TAB")
 (defgeneric get-prompt-input-string (prompt))
 (defgeneric %prompt-for-character (prompt &key gravity))
 (defgeneric %prompt-for-line (prompt &key initial-value completion-function test-function
-                                          history-symbol syntax-table gravity edit-callback
+                                          history-symbol default syntax-table gravity edit-callback
                                           special-keymap use-border))
 (defgeneric %prompt-for-file (prompt directory default existing gravity))
 
@@ -73,6 +73,7 @@ When set to false, the completion list only opens when the user presses TAB")
                                       completion-function
                                       test-function
                                       (history-symbol nil)
+									  (default nil)
                                       (syntax-table (current-syntax))
                                       (gravity *default-prompt-gravity*)
                                       edit-callback
@@ -82,6 +83,7 @@ When set to false, the completion list only opens when the user presses TAB")
                    completion-function
                    test-function
                    history-symbol
+				   default
                    syntax-table
                    gravity
                    edit-callback
@@ -117,6 +119,7 @@ When set to false, the completion list only opens when the user presses TAB")
                                        (or (alexandria:emptyp name)
                                            (get-buffer name))))
                  :history-symbol 'prompt-for-buffer
+				 :default default
                  :gravity gravity)))
     (if (string= result "")
         default
